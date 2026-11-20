@@ -84,3 +84,41 @@ a2.set_title("1-year option prices"); a2.legend(frameon=False, loc="upper left")
 fig.tight_layout(); fig.savefig("figures/constant_vs_svi.png", dpi=160, bbox_inches="tight"); plt.close(fig)
 for r_ in rows: print(r_[0], round(r_[2]*100, 2), "const %.2f svi %.2f" % (r_[3], r_[4]))
 print("atm", atm, "F", F, "r", r)
+
+# ---------- 4. two surfaces side by side, and what changed
+other = pd.read_csv("data/SPX_2026-11-20_1210_surface.csv").sort_values("T").reset_index(drop=True)
+dates = {"26 October 2026": surf, "20 November 2026": other}
+col = {"26 October 2026": BLUE, "20 November 2026": ORANGE}
+
+def ivol(s, kv, T):
+    TL = s["T"].values; i = min(max(np.searchsorted(TL, T) - 1, 0), len(TL) - 2)
+    w1 = svi(kv, *s.loc[i, pc]); w2 = svi(kv, *s.loc[i + 1, pc])
+    return np.sqrt((w1 + (T - TL[i]) / (TL[i + 1] - TL[i]) * (w2 - w1)) / T)
+
+kg = np.linspace(-0.6, 0.2, 70); Tg = np.linspace(0.1, 2.0, 70); KM, TM = np.meshgrid(kg, Tg)
+Zs = {d: np.array([ivol(s, kg, T) * 100 for T in Tg]) for d, s in dates.items()}
+zmin, zmax = min(z.min() for z in Zs.values()), max(z.max() for z in Zs.values())
+fig = plt.figure(figsize=(15, 6.2))
+for n, (d, s) in enumerate(dates.items()):
+    ax = fig.add_subplot(1, 2, n + 1, projection="3d")
+    sf = ax.plot_surface(KM, TM, Zs[d], cmap=cmap, vmin=zmin, vmax=zmax, edgecolor="none", antialiased=True)
+    ax.set_zlim(np.floor(zmin), np.ceil(zmax)); ax.view_init(elev=22, azim=-125)
+    ax.set_xlabel("log-moneyness k", labelpad=6); ax.set_ylabel("maturity T (years)", labelpad=6)
+    ax.set_zlabel("implied volatility (%)", labelpad=4)
+    ax.xaxis.pane.fill = ax.yaxis.pane.fill = ax.zaxis.pane.fill = False
+    ax.set_title(f"{d}  ·  S&P 500 at {s['spot'].iloc[0]:,.0f}", pad=2)
+cb = fig.colorbar(sf, ax=fig.axes, shrink=0.6, pad=0.02); cb.set_label("implied volatility (%)")
+fig.suptitle("SPX implied volatility surface before and after the November fall", fontweight="bold", y=0.97)
+fig.savefig("figures/vol_surface_comparison.png", dpi=150, bbox_inches="tight"); plt.close(fig)
+
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(13, 4.4))
+Tt = np.linspace(0.1, 2.0, 80); mg = np.linspace(0.6, 1.15, 150)
+for d, s in dates.items():
+    a1.plot(Tt, [ivol(s, 0.0, T) * 100 for T in Tt], color=col[d], lw=2, label=d)
+    a2.plot(mg * 100, ivol(s, np.log(mg), 1.0) * 100, color=col[d], lw=2, label=d)
+a1.set_title("At-the-money volatility by maturity: the term structure inverts")
+a1.set_xlabel("maturity T (years)"); a1.set_ylabel("implied volatility (%)")
+a2.set_title("1-year smile: the level rises, the shape stays")
+a2.set_xlabel("strike (% of forward)"); a2.set_ylabel("implied volatility (%)")
+for a in (a1, a2): a.grid(color=GRID, lw=0.7); a.legend(frameon=False)
+fig.tight_layout(); fig.savefig("figures/surface_change.png", dpi=160, bbox_inches="tight"); plt.close(fig)

@@ -4,9 +4,10 @@ This project builds an arbitrage-free implied volatility surface for S&P 500 ind
 from free market quotes, and then uses it to price equity hedges from the point of view of an
 asset manager. The surface is calibrated with the raw SVI model, checked against the static
 arbitrage conditions of Gatheral and Jacquier (2014), validated against bid and ask quotes, and
-verified with QuantLib.
+verified with QuantLib. The same pipeline, run on a second date, shows how the surface changed
+after a fall of the market of about 8%.
 
-![SPX implied volatility surface](figures/vol_surface.png)
+![SPX implied volatility surface before and after the November fall](figures/vol_surface_comparison.png)
 
 ## Why a volatility surface
 
@@ -28,6 +29,7 @@ against large falls is priced with a much higher volatility than at-the-money op
 | `04_svi.ipynb` | Calibrates a raw SVI smile to each expiry with spread-weighted least squares, adds a penalty against butterfly arbitrage and checks calendar arbitrage |
 | `05_pricer.ipynb` | Turns the SVI parameters into a pricer for any strike and maturity, and validates it against the market |
 | `06_quantlib.ipynb` | Verifies the pricer with QuantLib and compares a constant volatility with the SVI surface |
+| `07_surface_change.ipynb` | Compares the surfaces of 26 October and 20 November 2026: volatility level, term structure, skew and cost of protection |
 
 Shared functions (Black price, implied volatility, SVI and the butterfly function g) are in
 `functions.py`.
@@ -82,6 +84,24 @@ With a constant volatility, the 90% put costs about 44% less and the 70% put is 
 because the skew is ignored. For a hedge, this difference is far larger than the error of the
 surface.
 
+**How the surface changed (26 October against 20 November 2026).**
+
+![Term structure and 1-year smile on the two dates](figures/surface_change.png)
+
+| | 26 Oct 2026 | 20 Nov 2026 |
+|---|---|---|
+| S&P 500 | 7,674 | 7,049 |
+| ATM volatility, 1 month | 14.2% | 24.8% |
+| ATM volatility, 1 year | 16.7% | 20.4% |
+| ATM volatility, 2 years | 17.4% | 19.7% |
+| 1-year skew (vol at 90% of the forward minus ATM vol) | 3.3 points | 3.5 points |
+| 1-year put 90% (% of spot) | 2.9% | 4.1% |
+| 1-year put 80% (% of spot) | 1.7% | 2.5% |
+
+After the fall, volatility rose much more at short maturities, so the term structure, upward sloping
+in October, became inverted. The skew kept almost the same shape, while its level moved up. A 1-year
+put at 90% of the spot became about 40% more expensive.
+
 ## Method in brief
 
 - **Forward** from put-call parity, as the median over the five strikes closest to the money, so
@@ -104,6 +124,8 @@ surface.
 - Calendar arbitrage is checked after the fit and not imposed during the calibration.
 - The fit is weaker for expiries shorter than 5 weeks and in the deep put wing (k < −0.6).
 - The surface is not extrapolated in time beyond the first and the last calibrated expiry.
+- In a fast-moving market some quotes are not updated at the same time. The local filter does not
+  remove clusters of stale quotes, which increases the largest fit errors on 20 November.
 
 ## How to run
 
@@ -112,7 +134,8 @@ pip install -r requirements.txt
 ```
 
 Run the notebooks in order from the main folder. Notebook 01 downloads a new snapshot when the
-market is open; to analyse it, change `SNAPSHOT` at the top of notebooks 02–06. Quote-level data
+market is open, preferably in the middle of the session, as quotes right after the open are
+incomplete; to analyse it, change `SNAPSHOT` at the top of notebooks 02–06. Quote-level data
 files are not included in the repository (see `data/README.md`); the calibrated SVI parameters and
 the surface table are included, so notebooks 05 and 06 can also be run directly.
 
